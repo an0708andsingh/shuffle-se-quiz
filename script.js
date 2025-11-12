@@ -2438,7 +2438,7 @@ const quizData = [
 
 let startTime = new Date();
 
-// Helper function to shuffle an array
+// ----- helper: shuffle an array in-place -----
 function shuffleArray(array) {
   for (let i = array.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -2446,96 +2446,144 @@ function shuffleArray(array) {
   }
 }
 
-// Render Quiz (with shuffle)
+// ----- render quiz (questions + options shuffled correctly) -----
 function renderQuiz() {
   const container = document.getElementById('questions');
   container.innerHTML = '';
 
-  // Copy quiz data to avoid modifying original
+  // make a shallow copy of quizData so we can shuffle questions without changing original order
   const quiz = [...quizData];
 
-  // 🔀 Shuffle questions — comment this line to stop question shuffle
+  // ─────────── Comment this line to STOP question shuffle ───────────
   shuffleArray(quiz);
+  // ───────────────────────────────────────────────────────────────────
 
   quiz.forEach((q, qi) => {
     const divQ = document.createElement('div');
     divQ.className = 'question';
 
-    // Question title
+    // question title (supports HTML like <br>)
     const qTitle = document.createElement('h3');
-    qTitle.innerHTML = (qi + 1) + ". " + q.question; // supports <br>
+    qTitle.innerHTML = (qi + 1) + ". " + q.question;
     divQ.appendChild(qTitle);
 
-    // Create an array of option indexes for controlled shuffle
-    const optionIndexes = q.options.map((_, i) => i);
+    // image placeholder (only show if provided)
+    if (q.image && q.image.trim() !== "") {
+      const img = document.createElement('img');
+      img.src = q.image;
+      img.className = 'question-img';
+      divQ.appendChild(img);
+    }
 
-    // 🔀 Shuffle option order — comment this line to stop option shuffle
-    shuffleArray(optionIndexes);
+    // prepare options array (keep original indexes)
+    let optionsWithIndex = q.options.map((opt, idx) => ({ text: opt, origIndex: idx }));
 
-    // Map original correct answer to shuffled index
-    const correctIndex = optionIndexes.indexOf(q.answer);
+    // ─────────── Comment this line to STOP option shuffle ───────────
+    shuffleArray(optionsWithIndex);
+    // ────────────────────────────────────────────────────────────────
 
     const optionsDiv = document.createElement('div');
     optionsDiv.className = 'options';
 
-    optionIndexes.forEach((origIdx, idx) => {
-      const label = document.createElement('label');
-      const input = document.createElement('input');
-      input.type = 'radio';
-      input.name = 'q' + qi;
-      input.value = idx; // use new shuffled index
+    // normalize q.answer to an array of original indices
+    const correctOrigIndices = Array.isArray(q.answer) ? q.answer.slice() : [q.answer];
 
+    optionsWithIndex.forEach((optObj, renderedIdx) => {
+      const label = document.createElement('label');
+      label.className = 'option-label';
+
+      const input = document.createElement('input');
+      input.type = Array.isArray(q.answer) && q.answer.length > 1 ? 'checkbox' : 'radio';
+      input.name = 'q' + qi;
+      input.value = renderedIdx; // rendered index (position after shuffle)
+
+      // mark dataset.origIndex for debugging if needed
+      input.dataset.orig = optObj.origIndex;
+
+      // mark whether this input corresponds to an originally-correct option
+      if (correctOrigIndices.includes(optObj.origIndex)) {
+        input.dataset.isCorrect = 'true';
+      } else {
+        input.dataset.isCorrect = 'false';
+      }
+
+      // visual selected toggle
       input.addEventListener('change', () => {
+        // for radio: remove selected from all; for checkbox toggle only this
         const allLabels = optionsDiv.querySelectorAll('label');
-        allLabels.forEach(l => l.classList.remove('selected'));
-        label.classList.add('selected');
+        if (input.type === 'radio') {
+          allLabels.forEach(l => l.classList.remove('selected'));
+          label.classList.add('selected');
+        } else {
+          label.classList.toggle('selected');
+        }
       });
 
       label.appendChild(input);
-      label.appendChild(document.createTextNode(q.options[origIdx]));
+      label.appendChild(document.createTextNode(optObj.text));
       optionsDiv.appendChild(label);
     });
-
-    // Save the shuffled correct answer index for checking later
-    divQ.dataset.correct = correctIndex;
 
     divQ.appendChild(optionsDiv);
     container.appendChild(divQ);
   });
 }
 
-// Calculate Score
+// ----- calculate score and highlight answers -----
 function calculateScore() {
   let correctCount = 0;
   let wrongCount = 0;
   const endTime = new Date();
-  const timeTaken = Math.floor((endTime - startTime) / 1000);
+  const timeTaken = Math.floor((endTime - startTime)/1000);
 
-  const allQuestions = document.querySelectorAll('.question');
-  allQuestions.forEach((divQ, qi) => {
-    const selectedEls = divQ.querySelectorAll('input[type=radio]');
-    const correctIdx = parseInt(divQ.dataset.correct);
-    let selected = -1;
+  const questionDivs = Array.from(document.querySelectorAll('.question'));
 
-    selectedEls.forEach((el, i) => {
-      if (el.checked) selected = i;
-      const lbl = el.parentElement;
-      lbl.classList.remove('selected', 'correct', 'wrong');
-      if (i === correctIdx) lbl.classList.add('correct');
-      else if (el.checked) lbl.classList.add('wrong');
+  questionDivs.forEach((divQ) => {
+    // find inputs for this question
+    const inputs = Array.from(divQ.querySelectorAll('input'));
+    // gather selected inputs (by rendered position)
+    const selectedInputs = inputs.filter(i => i.checked);
+
+    // determine correct inputs (using data-is-correct flags)
+    const correctInputs = inputs.filter(i => i.dataset.isCorrect === 'true');
+
+    // clear previous classes
+    inputs.forEach(i => i.parentElement.classList.remove('selected','correct','wrong'));
+
+    // mark correct options visually
+    correctInputs.forEach(ci => ci.parentElement.classList.add('correct'));
+
+    // mark user's wrong selections visually
+    selectedInputs.forEach(si => {
+      if (si.dataset.isCorrect !== 'true') si.parentElement.classList.add('wrong');
     });
 
-    if (selected === correctIdx) correctCount++;
+    // scoring: question is correct only if selected set equals correct set
+    const selectedOrigSet = new Set(selectedInputs.map(i => i.dataset.orig));
+    const correctOrigSet  = new Set(correctInputs.map(i => i.dataset.orig));
+
+    // compare sets
+    let isExactlyCorrect = (selectedOrigSet.size === correctOrigSet.size);
+    if (isExactlyCorrect) {
+      for (let v of selectedOrigSet) {
+        if (!correctOrigSet.has(v)) { isExactlyCorrect = false; break; }
+      }
+    }
+
+    if (isExactlyCorrect) correctCount++;
     else wrongCount++;
   });
 
+  // show result
   document.getElementById('result').style.display = 'block';
   document.getElementById('score').textContent =
     `Correct: ${correctCount} | Wrong: ${wrongCount} | Time: ${timeTaken} sec`;
+
+  // hide submit to avoid double submits
   document.getElementById('submitBtn').style.display = 'none';
 }
 
-// Buttons
+// ----- event wiring -----
 document.getElementById('submitBtn').addEventListener('click', calculateScore);
 document.getElementById('retakeBtn').addEventListener('click', () => {
   document.getElementById('result').style.display = 'none';
@@ -2545,14 +2593,13 @@ document.getElementById('retakeBtn').addEventListener('click', () => {
 });
 document.getElementById('resetBtn').addEventListener('click', () => {
   const allLabels = document.querySelectorAll('.options label');
-  allLabels.forEach(l => l.classList.remove('correct', 'wrong', 'selected'));
-  const allInputs = document.querySelectorAll('input[type=radio]');
+  allLabels.forEach(l => l.classList.remove('correct','wrong','selected'));
+  const allInputs = document.querySelectorAll('input');
   allInputs.forEach(i => i.checked = false);
   document.getElementById('result').style.display = 'none';
   document.getElementById('submitBtn').style.display = 'inline-block';
   startTime = new Date();
 });
 
-// Initial render
+// initial render
 renderQuiz();
-

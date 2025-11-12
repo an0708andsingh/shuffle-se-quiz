@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Software Engineering Quiz</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="quiz-container">
+    <h1>Software Engineering Quiz With Shuffle</h1>
+    <div class="progress">
+      <!-- <span id="progress-text">Question 1 of 1</span> -->
+      <div class="progress-bar">
+        <div id="progress-fill"></div>
+      </div>
+    </div>
+    <div id="questions"></div>
+    <div class="buttons">
+      <button id="submitBtn">Submit Quiz</button>
+      <button id="retakeBtn">Retake (Shuffle)</button>
+      <button id="resetBtn">Reset Quiz</button>
+    </div>
+    <div id="result" class="hidden">
+      <h2>Quiz Results</h2>
+      <p id="score"></p>
+    </div>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>

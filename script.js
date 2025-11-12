@@ -2438,26 +2438,52 @@ const quizData = [
 
 let startTime = new Date();
 
+// Helper function to shuffle an array
+function shuffleArray(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+}
+
+// Render Quiz (with shuffle)
 function renderQuiz() {
   const container = document.getElementById('questions');
   container.innerHTML = '';
-  quizData.forEach((q, qi) => {
+
+  // Copy quiz data to avoid modifying original
+  const quiz = [...quizData];
+
+  // 🔀 Shuffle questions — comment this line to stop question shuffle
+  shuffleArray(quiz);
+
+  quiz.forEach((q, qi) => {
     const divQ = document.createElement('div');
     divQ.className = 'question';
 
+    // Question title
     const qTitle = document.createElement('h3');
-    qTitle.textContent = (qi+1) + ". " + q.question;
+    qTitle.innerHTML = (qi + 1) + ". " + q.question; // supports <br>
     divQ.appendChild(qTitle);
+
+    // Create an array of option indexes for controlled shuffle
+    const optionIndexes = q.options.map((_, i) => i);
+
+    // 🔀 Shuffle option order — comment this line to stop option shuffle
+    shuffleArray(optionIndexes);
+
+    // Map original correct answer to shuffled index
+    const correctIndex = optionIndexes.indexOf(q.answer);
 
     const optionsDiv = document.createElement('div');
     optionsDiv.className = 'options';
 
-    q.options.forEach((opt, idx) => {
+    optionIndexes.forEach((origIdx, idx) => {
       const label = document.createElement('label');
       const input = document.createElement('input');
       input.type = 'radio';
-      input.name = 'q'+qi;
-      input.value = idx;
+      input.name = 'q' + qi;
+      input.value = idx; // use new shuffled index
 
       input.addEventListener('change', () => {
         const allLabels = optionsDiv.querySelectorAll('label');
@@ -2466,47 +2492,52 @@ function renderQuiz() {
       });
 
       label.appendChild(input);
-      label.appendChild(document.createTextNode(opt));
+      label.appendChild(document.createTextNode(q.options[origIdx]));
       optionsDiv.appendChild(label);
     });
+
+    // Save the shuffled correct answer index for checking later
+    divQ.dataset.correct = correctIndex;
 
     divQ.appendChild(optionsDiv);
     container.appendChild(divQ);
   });
 }
 
+// Calculate Score
 function calculateScore() {
   let correctCount = 0;
   let wrongCount = 0;
   const endTime = new Date();
-  const timeTaken = Math.floor((endTime - startTime)/1000);
+  const timeTaken = Math.floor((endTime - startTime) / 1000);
 
-  quizData.forEach((q, qi) => {
-    const selectedEls = document.getElementsByName('q'+qi);
+  const allQuestions = document.querySelectorAll('.question');
+  allQuestions.forEach((divQ, qi) => {
+    const selectedEls = divQ.querySelectorAll('input[type=radio]');
+    const correctIdx = parseInt(divQ.dataset.correct);
     let selected = -1;
-    for (let el of selectedEls) if (el.checked) selected = parseInt(el.value);
 
-    selectedEls.forEach(el => {
+    selectedEls.forEach((el, i) => {
+      if (el.checked) selected = i;
       const lbl = el.parentElement;
-      lbl.classList.remove('selected');
-      if (parseInt(el.value) === q.answer) lbl.classList.add('correct');
+      lbl.classList.remove('selected', 'correct', 'wrong');
+      if (i === correctIdx) lbl.classList.add('correct');
       else if (el.checked) lbl.classList.add('wrong');
     });
 
-    if (selected === q.answer) correctCount++;
+    if (selected === correctIdx) correctCount++;
     else wrongCount++;
   });
 
-  const resultDiv = document.getElementById('result');
-  resultDiv.style.display = 'block';
-  document.getElementById('score').textContent = `Correct: ${correctCount} | Wrong: ${wrongCount} | Time: ${timeTaken} sec`;
+  document.getElementById('result').style.display = 'block';
+  document.getElementById('score').textContent =
+    `Correct: ${correctCount} | Wrong: ${wrongCount} | Time: ${timeTaken} sec`;
   document.getElementById('submitBtn').style.display = 'none';
 }
 
 // Buttons
 document.getElementById('submitBtn').addEventListener('click', calculateScore);
 document.getElementById('retakeBtn').addEventListener('click', () => {
- quizData.sort(() => Math.random() - 0.5);
   document.getElementById('result').style.display = 'none';
   document.getElementById('submitBtn').style.display = 'inline-block';
   renderQuiz();
@@ -2514,7 +2545,7 @@ document.getElementById('retakeBtn').addEventListener('click', () => {
 });
 document.getElementById('resetBtn').addEventListener('click', () => {
   const allLabels = document.querySelectorAll('.options label');
-  allLabels.forEach(l => l.classList.remove('correct','wrong','selected'));
+  allLabels.forEach(l => l.classList.remove('correct', 'wrong', 'selected'));
   const allInputs = document.querySelectorAll('input[type=radio]');
   allInputs.forEach(i => i.checked = false);
   document.getElementById('result').style.display = 'none';
@@ -2522,4 +2553,6 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   startTime = new Date();
 });
 
+// Initial render
 renderQuiz();
+
